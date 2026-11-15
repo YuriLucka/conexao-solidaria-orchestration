@@ -40,6 +40,15 @@ services:
               claims_to_verify: ["exp"]
               run_on_preflight: false
 
+  # Site (Blazor WebAssembly no nginx). Rota "/" sem método de propósito: no Kong, rota com método ganha prioridade
+  # sobre rota sem método, e "/api/gestao", "/api/doacoes" e "/api/campanhas" precisam vencer pelo prefixo mais longo.
+  - name: web
+    url: http://web:8080
+    routes:
+      - name: site
+        paths: ["/"]
+        strip_path: false
+
   # Saúde dos dois microsserviços pelo gateway: /status/campanhas-api e /status/doacoes-worker.
   - name: campanhas-api-health
     url: http://campanhas-api:8080/health

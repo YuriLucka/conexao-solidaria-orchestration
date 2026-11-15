@@ -1,7 +1,7 @@
 # Ambiente local de desenvolvimento. A entrega roda no Kubernetes (pasta k8s/).
 # Valores sensíveis vêm do .env (copie de .env.example). Os repositórios dos serviços ficam ao lado deste:
-#   ../conexao-solidaria-campanhas-api   ../conexao-solidaria-doacoes-worker
-# Entrada única: Kong em http://localhost:8000 (Scalar em /scalar). RabbitMQ: http://localhost:15672.
+#   ../conexao-solidaria-campanhas-api   ../conexao-solidaria-doacoes-worker   ../conexao-solidaria-web
+# Entrada única: Kong em http://localhost:8000 (site em /, API em /api, Scalar em /scalar). RabbitMQ: http://localhost:15672.
 name: conexao-solidaria
 
 services:
@@ -90,6 +90,11 @@ services:
       RabbitMq__User: ${RABBIT_USER}
       RabbitMq__Pass: ${RABBIT_PASS}
 
+  # Site (front Blazor WebAssembly + MudBlazor), servido pelo nginx e publicado pelo Kong em "/".
+  web:
+    build:
+      context: ../conexao-solidaria-web
+
   # Gera o kong.yml final com o segredo do JWT (o arquivo versionado só tem ${JWT_SECRET}).
   kong-config:
     image: alpine:3.20
@@ -115,6 +120,7 @@ services:
     depends_on:
       kong-config: { condition: service_completed_successfully }
       campanhas-api: { condition: service_started }
+      web: { condition: service_started }
 
 volumes:
   postgres-data:

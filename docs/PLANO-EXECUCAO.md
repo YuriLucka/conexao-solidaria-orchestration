@@ -102,4 +102,11 @@ Kubernetes (kind), observabilidade (Prometheus, Grafana, Zabbix), documentos de 
 | A4 | feito: exemplos no Scalar, `Campanhas.API.http`, coleção Postman (`docs/postman`) rodada do zero pelo Kong: 11/11 |
 | A5 | feito: revisão independente sem item crítico; 3 importantes e 3 menores corrigidos (seção acima) |
 | B1 a B5 | feito: categoria/capa/crianças, doações recentes, acompanhamento, gestão; 120 testes no total |
-| C1 | em andamento |
+| C1 a C5 | feito: Blazor WASM + MudBlazor, identidade do protótipo (cores, fontes locais, logo, 12 capas, 13 expressões do Solzinho, ícones), layouts público e gestão, sessão JWT, bateria Playwright (5 aparelhos) |
+| D1 a D5 | feito: painel, campanha, entrar, cadastro, como funciona, termos, 404 |
+| E1 a E3 | feito: doar, acompanhamento (Pendente → Confirmada ao vivo), minhas doações |
+| F1 a F4 | feito: visão geral (gráfico, alertas, ao vivo), campanhas, criar/editar (capa, prévia, regras), concluir/cancelar, doadores, doações |
+| G | parcial: 48 testes de unidade do front (xUnit + bUnit); E2E de doação e de gestão em iPhone (WebKit) e desktop (Chromium); faltam axe (acessibilidade) e revisão independente |
+| H1 | feito: site no Compose atrás do Kong (`/` site, `/api` API) |
+
+Decisões do front: "Doar" envia a intenção direto (sem a tela de Pix do protótipo); datas da gestão com máscara dd/mm/aaaa (o campo datetime-local quebra o Blazor em navegadores sem suporte, como o WebKit de teste no Windows); início às 00:00 e término às 23:59 de Brasília; gráfico em SVG próprio no visual do protótipo.
