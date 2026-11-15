@@ -1,0 +1,121 @@
+# Ambiente local de desenvolvimento. A entrega roda no Kubernetes (pasta k8s/).
+# Valores sensíveis vêm do .env (copie de .env.example). Os repositórios dos serviços ficam ao lado deste:
+#   ../conexao-solidaria-campanhas-api   ../conexao-solidaria-doacoes-worker
+# Entrada única: Kong em http://localhost:8000 (Scalar em /scalar). RabbitMQ: http://localhost:15672.
+name: conexao-solidaria
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: conexao_solidaria
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports: ["5432:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d conexao_solidaria"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4.4-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASS}
+    ports: ["5672:5672", "15672:15672"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # Declara a fila da doação pela API de gerenciamento antes dos serviços subirem.
+  rabbitmq-init:
+    image: curlimages/curl:8.10.1
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    volumes:
+      - ./rabbitmq/definitions.json:/definitions.json:ro
+    command: ["-fsS", "--retry", "20", "--retry-all-errors", "--retry-delay", "3", "-u", "${RABBIT_USER}:${RABBIT_PASS}",
+              "-H", "content-type:application/json", "-X", "POST", "--data-binary", "@/definitions.json",
+              "http://rabbitmq:15672/api/definitions"]
+    restart: "no"
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  campanhas-api:
+    build:
+      context: ../conexao-solidaria-campanhas-api
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq-init: { condition: service_completed_successfully }
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Database=conexao_solidaria;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__Redis: "redis:6379"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__User: ${RABBIT_USER}
+      RabbitMq__Pass: ${RABBIT_PASS}
+      JwtSettings__SecretKey: ${JWT_SECRET}
+      Seed__Enabled: "true"
+      Cors__Origens: "http://localhost:8000,http://localhost:8080,http://localhost:5173"
+    healthcheck:
+      # A imagem aspnet não tem curl; usa o /dev/tcp do bash.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8080 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q Healthy <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  doacoes-worker:
+    build:
+      context: ../conexao-solidaria-doacoes-worker
+    depends_on:
+      # O esquema do banco é criado pelas migrações da API.
+      campanhas-api: { condition: service_healthy }
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Database=conexao_solidaria;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__Redis: "redis:6379"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__User: ${RABBIT_USER}
+      RabbitMq__Pass: ${RABBIT_PASS}
+
+  # Gera o kong.yml final com o segredo do JWT (o arquivo versionado só tem ${JWT_SECRET}).
+  kong-config:
+    image: alpine:3.20
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - ./kong/kong.yml:/in/kong.yml:ro
+      - kong-rendered:/out
+    command: ["sh", "-c", "apk add --no-cache gettext >/dev/null && envsubst '$${JWT_SECRET}' < /in/kong.yml > /out/kong.yml"]
+    restart: "no"
+
+  kong:
+    image: kong:3.9
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "127.0.0.1:8001"
+      KONG_STATUS_LISTEN: "0.0.0.0:8100"
+    volumes:
+      - kong-rendered:/kong/declarative:ro
+    ports: ["8000:8000"]
+    depends_on:
+      kong-config: { condition: service_completed_successfully }
+      campanhas-api: { condition: service_started }
+
+volumes:
+  postgres-data:
+  kong-rendered:

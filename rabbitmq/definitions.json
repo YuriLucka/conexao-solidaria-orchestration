@@ -1,0 +1,51 @@
+{
+  "exchanges": [
+    {
+      "name": "ConexaoSolidaria.Contracts.Events:DoacaoRecebidaEvent",
+      "vhost": "/",
+      "type": "fanout",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "doacao-recebida",
+      "vhost": "/",
+      "type": "fanout",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "doacao-recebida",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "source": "ConexaoSolidaria.Contracts.Events:DoacaoRecebidaEvent",
+      "vhost": "/",
+      "destination": "doacao-recebida",
+      "destination_type": "exchange",
+      "routing_key": "",
+      "arguments": {}
+    },
+    {
+      "source": "doacao-recebida",
+      "vhost": "/",
+      "destination": "doacao-recebida",
+      "destination_type": "queue",
+      "routing_key": "",
+      "arguments": {}
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+# API Gateway (bônus do enunciado). Kong DB-less: a configuração inteira está neste arquivo.
+# ${JWT_SECRET} é substituído na subida (Compose: serviço kong-config; Kubernetes: script up). O valor não fica no repositório.
+# O Kong confere assinatura e expiração do JWT nas rotas protegidas; o perfil (GestorONG/Doador) é conferido pela API (403).
+_format_version: "3.0"
+
+services:
+  - name: campanhas-api
+    url: http://campanhas-api:8080
+    routes:
+      - name: publico-login-cadastro
+        paths: ["/api/auth", "/api/doadores"]
+        methods: ["POST", "OPTIONS"]
+        strip_path: false
+      - name: publico-painel
+        paths: ["/api/campanhas/ativas"]
+        methods: ["GET", "OPTIONS"]
+        strip_path: false
+      - name: publico-detalhe-campanha
+        paths: ["~/api/campanhas/[0-9a-fA-F-]{36}$"]
+        methods: ["GET", "OPTIONS"]
+        strip_path: false
+      - name: documentacao
+        paths: ["/scalar", "/openapi"]
+        methods: ["GET"]
+        strip_path: false
+      - name: protegido-campanhas
+        paths: ["/api/campanhas"]
+        strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+              run_on_preflight: false
+      - name: protegido-doacoes
+        paths: ["/api/doacoes"]
+        strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: ["exp"]
+              run_on_preflight: false
+
+  # Saúde dos dois microsserviços pelo gateway: /status/campanhas-api e /status/doacoes-worker.
+  - name: campanhas-api-health
+    url: http://campanhas-api:8080/health
+    routes:
+      - name: status-campanhas-api
+        paths: ["/status/campanhas-api"]
+        methods: ["GET"]
+
+  - name: doacoes-worker-health
+    url: http://doacoes-worker:8080/health
+    routes:
+      - name: status-doacoes-worker
+        paths: ["/status/doacoes-worker"]
+        methods: ["GET"]
+
+# O plugin jwt procura o consumidor pela claim "iss" do token.
+consumers:
+  - username: conexao-solidaria-app
+    jwt_secrets:
+      - key: "conexao-solidaria"
+        algorithm: HS256
+        secret: "${JWT_SECRET}"
+
+plugins:
+  - name: prometheus
+    config:
+      status_code_metrics: true
+      latency_metrics: true
+      per_consumer: false
