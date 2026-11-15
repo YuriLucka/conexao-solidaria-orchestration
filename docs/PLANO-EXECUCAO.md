@@ -25,7 +25,7 @@
 | B1 | Campanha com `categoria`, `capa` e `criancasAtendidas` (opcionais) | testes + migração |
 | B2 | Detalhe público: quantidade de doações e doadores; `GET /api/campanhas/{id}/doacoes-recentes` (só processadas, nome abreviado "Mariana A.") | testes |
 | B3 | `GET /api/doacoes/{id}` (dono) para o acompanhamento; título da campanha nas doações | testes |
-| B4 | Gestão: `GET /api/doacoes` (filtros), `GET /api/doadores` (CPF mascarado, totais), `GET /api/gestao/resumo` (visão geral) | testes |
+| B4 | Gestão: `GET /api/doacoes` (filtros), `GET /api/gestao/doadores` (CPF mascarado, totais), `GET /api/gestao/resumo` (visão geral) | testes |
 | B5 | Revisão e CI | CI verde |
 
 ## C. Front: fundação
@@ -85,8 +85,21 @@
 
 Kubernetes (kind), observabilidade (Prometheus, Grafana, Zabbix), documentos de entrega e vídeo: Fases 5, 6 e 7 do `PLANO.md`.
 
+## Decisões tomadas durante a execução
+
+- Datas sem fuso enviadas à API são horário de Brasília (UTC-3); término informado só com a data vale até 23:59:59 daquele dia. Visão geral da gestão conta dias de Brasília.
+- Cache do painel com 30 s de vida; `prazoEncerrado` recalculado a cada leitura.
+- Login com e-mail mal formatado responde 401 (mesma mensagem de credencial inválida) e o BCrypt roda mesmo sem usuário, para o tempo de resposta não revelar quais e-mails têm conta.
+- Mantidos como estão (decisão do grupo, enunciado não proíbe): doação aceita antes da `DataInicio`; detalhe público responde também para campanha encerrada (transparência); doações recentes mostram primeiro nome e inicial do sobrenome.
+
 ## Andamento
 
 | Etapa | Situação |
 |---|---|
-| A1 | em andamento |
+| A1 | feito: nenhum desvio do enunciado; nomes `idCampanha`, `valorDoacao`, `DoacaoRecebidaEvent` idênticos |
+| A2 | feito: validação automática, 401/403/404 e erros de domínio em `ProblemDetails` português |
+| A3 | feito: 54 testes de integração (PostgreSQL, Redis, RabbitMQ reais), incluindo a mensagem chegando no RabbitMQ e o valor sem mudar sem o worker |
+| A4 | feito: exemplos no Scalar, `Campanhas.API.http`, coleção Postman (`docs/postman`) rodada do zero pelo Kong: 11/11 |
+| A5 | feito: revisão independente sem item crítico; 3 importantes e 3 menores corrigidos (seção acima) |
+| B1 a B5 | feito: categoria/capa/crianças, doações recentes, acompanhamento, gestão; 120 testes no total |
+| C1 | em andamento |
