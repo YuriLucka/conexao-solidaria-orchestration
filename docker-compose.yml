@@ -67,7 +67,11 @@ services:
       RabbitMq__User: ${RABBIT_USER}
       RabbitMq__Pass: ${RABBIT_PASS}
       JwtSettings__SecretKey: ${JWT_SECRET}
-      Seed__Enabled: "true"
+      # Conta da ONG criada na primeira subida, mesmo com o seed desligado (Seed__Enabled=false = site "recém-publicado").
+      GestorInicial__Nome: "Helena Martins"
+      GestorInicial__Email: ${GESTOR_EMAIL:-helena@esperancasolidaria.demo}
+      GestorInicial__Senha: ${GESTOR_SENHA:-Gestao@2026}
+      Seed__Enabled: ${SEED:-true}
       Cors__Origens: "http://localhost:8000,http://localhost:8080,http://localhost:5173"
     healthcheck:
       # A imagem aspnet não tem curl; usa o /dev/tcp do bash.
