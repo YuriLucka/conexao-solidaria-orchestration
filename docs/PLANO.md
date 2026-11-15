@@ -98,7 +98,7 @@ Versão 2, 14/11/2026 (atualizada com o andamento na seção 12). Substitui a v1
 | Senha | mínimo 8, letra, número e caractere especial (regra da FCG) |
 | GestorONG | só por seed (`helena@esperancasolidaria.demo` / `Gestao@2026`); cadastro público cria sempre `Doador` |
 | Seed | `Seed__Enabled=true`; datas relativas à subida (campanhas nunca vencem antes da correção) |
-| Token | 120 min |
+| Token | JWT de 15 min só na memória do site; refresh token de 7 dias em cookie HttpOnly (SameSite=Strict, Path=/api/auth), trocado a cada uso; reuso de token já trocado derruba a família; logout revoga no servidor |
 
 ## 5. Dados (PostgreSQL)
 
