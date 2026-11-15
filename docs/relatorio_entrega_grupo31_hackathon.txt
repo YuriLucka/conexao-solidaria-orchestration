@@ -11,6 +11,8 @@ Participantes e usernames no Discord:
 
 Link da documentação:
 - https://github.com/YuriLucka/conexao-solidaria-orchestration (README principal: arquitetura, passo a passo para subir localmente, Kubernetes, observabilidade, CI/CD e justificativa dos bancos de dados)
+- Diagrama de arquitetura: https://github.com/YuriLucka/conexao-solidaria-orchestration/blob/main/docs/arquitetura.md
+- Justificativa dos bancos de dados (PDF): https://github.com/YuriLucka/conexao-solidaria-orchestration/blob/main/docs/bancos-de-dados.pdf
 
 Link do(s) repositório(s):
 - Orquestração (Docker Compose, manifestos Kubernetes, Kong, observabilidade e documentação): https://github.com/YuriLucka/conexao-solidaria-orchestration

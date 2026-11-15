@@ -35,7 +35,7 @@ Diagrama técnico completo: [docs/arquitetura.md](docs/arquitetura.md).
 
 **Fluxo da doação.** O doador chama `POST /api/doacoes`. A API grava a doação como `Pendente` e o evento `DoacaoRecebidaEvent` no outbox, na mesma transação, e responde `202`. O MassTransit entrega o evento na fila `doacao-recebida`. O `doacoes-worker` consome, soma o valor na campanha (transação com as linhas travadas, idempotente), marca a doação como `Processada` e apaga o cache do painel no Redis. **A API nunca altera o valor arrecadado.**
 
-**Bancos.** PostgreSQL 17 (banco X) para usuários, campanhas e doações; Redis 7 (banco Y) como cache do painel público. Justificativa em [docs/bancos-de-dados.md](docs/bancos-de-dados.md).
+**Bancos.** PostgreSQL 17 (banco X) para usuários, campanhas e doações; Redis 7 (banco Y) como cache do painel público. Justificativa em [docs/bancos-de-dados.pdf](docs/bancos-de-dados.pdf) (texto também em [docs/bancos-de-dados.md](docs/bancos-de-dados.md)).
 
 ## Subir no Kubernetes (entrega)
 
@@ -116,5 +116,6 @@ k8s/                      kind-config, namespace, infra (PostgreSQL, Redis, Rabb
 grafana/dashboards/       dashboard provisionado
 scripts/                  up.sh, down.sh, gerar-trafego.sh
 tools/carga/              dados de demonstração e de carga (SQL)
-docs/                     arquitetura, bancos de dados, coleção Postman, plano, relatório de entrega
+docs/                     arquitetura, bancos de dados (PDF), coleção Postman, plano, relatório de entrega
+tools/docs/               gera o PDF dos bancos a partir do Markdown (python tools/docs/md_para_pdf.py ...)
 ```
