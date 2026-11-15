@@ -1,0 +1,22 @@
+HACKATHON - 11NETT
+Relatório de Entrega - Conexão Solidária (ONG Esperança Solidária)
+
+Nome do grupo: Grupo 31
+
+Participantes e usernames no Discord:
+- Carlos Eduardo Menegassi (Discord: CarlosEM_ - RM371683)
+- Pedro Henrique Ribeiro Custódio (Discord: Pedro Custodio - RM373420)
+- Yuri Lucka Carriel Rodrigues (Discord: Yuri Lucka - RM371938)
+- Rafael Moura Gagliard (Discord: Rafael Gagliard - RM371921)
+
+Link da documentação:
+- https://github.com/YuriLucka/conexao-solidaria-orchestration (README principal: arquitetura, passo a passo para subir localmente, Kubernetes, observabilidade, CI/CD e justificativa dos bancos de dados)
+
+Link do(s) repositório(s):
+- Orquestração (Docker Compose, manifestos Kubernetes, Kong, observabilidade e documentação): https://github.com/YuriLucka/conexao-solidaria-orchestration
+- Campanhas (campanhas-api: autenticação JWT, doadores, campanhas, painel público e doações, com pipeline CI): https://github.com/YuriLucka/conexao-solidaria-campanhas-api
+- Doações (doacoes-worker: consumidor RabbitMQ que atualiza o valor arrecadado, com pipeline CI): https://github.com/YuriLucka/conexao-solidaria-doacoes-worker
+- Site (front-end Blazor WebAssembly, com pipeline CI): https://github.com/YuriLucka/conexao-solidaria-web
+
+Link do vídeo:
+- (inserir o link do YouTube após a gravação)
