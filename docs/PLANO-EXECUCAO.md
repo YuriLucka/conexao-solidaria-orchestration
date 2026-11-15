@@ -106,7 +106,7 @@ Kubernetes (kind), observabilidade (Prometheus, Grafana, Zabbix), documentos de 
 | D1 a D5 | feito: painel, campanha, entrar, cadastro, como funciona, termos, 404 |
 | E1 a E3 | feito: doar, acompanhamento (Pendente → Confirmada ao vivo), minhas doações |
 | F1 a F4 | feito: visão geral (gráfico, alertas, ao vivo), campanhas, criar/editar (capa, prévia, regras), concluir/cancelar, doadores, doações |
-| G | parcial: 48 testes de unidade do front (xUnit + bUnit); E2E de doação e de gestão em iPhone (WebKit) e desktop (Chromium); faltam axe (acessibilidade) e revisão independente |
+| G | feito: 48 testes de unidade do front (xUnit + bUnit); E2E de doação e de gestão em iPhone (WebKit) e desktop (Chromium); axe WCAG 2.1 AA sem violação (14 telas x 2 aparelhos x tema claro/escuro, `npm run acessibilidade`); revisão independente com 8 achados corrigidos; fotos no login e no topo do painel (extra); cabeçalhos de segurança no nginx |
 | H1 | feito: site no Compose atrás do Kong (`/` site, `/api` API) |
 
 Decisões do front: "Doar" envia a intenção direto (sem a tela de Pix do protótipo); datas da gestão com máscara dd/mm/aaaa (o campo datetime-local quebra o Blazor em navegadores sem suporte, como o WebKit de teste no Windows); início às 00:00 e término às 23:59 de Brasília; gráfico em SVG próprio no visual do protótipo.
