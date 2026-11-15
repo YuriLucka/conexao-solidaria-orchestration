@@ -1,0 +1,431 @@
+{
+  "info": {
+    "name": "Conexão Solidária - roteiro do vídeo",
+    "description": "Itens d.i a d.iii do enunciado. Rode em ordem (Run collection). baseUrl padrão: Kong em http://localhost:8000.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "tokenGestora",
+      "value": ""
+    },
+    {
+      "key": "tokenDoadora",
+      "value": ""
+    },
+    {
+      "key": "campanhaId",
+      "value": ""
+    },
+    {
+      "key": "dataInicio",
+      "value": ""
+    },
+    {
+      "key": "dataFim",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "d.i Autenticação",
+      "item": [
+        {
+          "name": "Login gestora",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"helena@esperancasolidaria.demo\",\n  \"senha\": \"Gestao@2026\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('perfil GestorONG', () => pm.expect(pm.response.json().perfil).to.eql('GestorONG'));",
+                  "pm.collectionVariables.set('tokenGestora', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login doadora",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"mariana@email.demo\",\n  \"senha\": \"Doar@2026\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('tokenDoadora', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Doador na gestão (403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/campanhas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "campanhas"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDoadora}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "d.ii Campanha",
+      "item": [
+        {
+          "name": "Término no passado (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/campanhas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "campanhas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Agasalho Solidário\",\n  \"descricao\": \"Casacos e cobertores para as 220 crianças acolhidas pela ONG.\",\n  \"dataInicio\": \"2026-01-01T00:00:00Z\",\n  \"dataFim\": \"2026-02-01T00:00:00Z\",\n  \"metaFinanceira\": 15000\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenGestora}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = new Date(); const fim = new Date(d.getTime() + 60*86400000);",
+                  "pm.collectionVariables.set('dataInicio', d.toISOString());",
+                  "pm.collectionVariables.set('dataFim', fim.toISOString());"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Meta zero (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/campanhas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "campanhas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Agasalho Solidário\",\n  \"descricao\": \"Casacos e cobertores para as 220 crianças acolhidas pela ONG.\",\n  \"dataInicio\": \"{{dataInicio}}\",\n  \"dataFim\": \"{{dataFim}}\",\n  \"metaFinanceira\": 0\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenGestora}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = new Date(); const fim = new Date(d.getTime() + 60*86400000);",
+                  "pm.collectionVariables.set('dataInicio', d.toISOString());",
+                  "pm.collectionVariables.set('dataFim', fim.toISOString());"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Criar campanha (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/campanhas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "campanhas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Agasalho Solidário\",\n  \"descricao\": \"Casacos e cobertores para as 220 crianças acolhidas pela ONG.\",\n  \"dataInicio\": \"{{dataInicio}}\",\n  \"dataFim\": \"{{dataFim}}\",\n  \"metaFinanceira\": 15000\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenGestora}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.test('nasce Ativa', () => pm.expect(pm.response.json().status).to.eql('Ativa'));",
+                  "pm.collectionVariables.set('campanhaId', pm.response.json().id);"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = new Date(); const fim = new Date(d.getTime() + 60*86400000);",
+                  "pm.collectionVariables.set('dataInicio', d.toISOString());",
+                  "pm.collectionVariables.set('dataFim', fim.toISOString());"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "d.iii Doação",
+      "item": [
+        {
+          "name": "Doar (202)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/doacoes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "doacoes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idCampanha\": \"{{campanhaId}}\",\n  \"valorDoacao\": 150.0\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDoadora}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202', () => pm.response.to.have.status(202));",
+                  "pm.test('Pendente', () => pm.expect(pm.response.json().status).to.eql('Pendente'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Painel público (valor atualizado pelo worker)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/campanhas/ativas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "campanhas",
+                "ativas"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const c = pm.response.json().find(x => x.id === pm.collectionVariables.get('campanhaId'));",
+                  "pm.test('valor somado pelo worker', () => pm.expect(c.valorTotalArrecadado).to.be.at.least(150));"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Dá tempo do worker processar.",
+                  "setTimeout(() => {}, 3000);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
