@@ -1,0 +1,126 @@
+# Broker: RabbitMQ com painel de gerenciamento (http://localhost:15672) e métricas para o Prometheus (porta 15692).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  namespace: conexao-solidaria
+  labels:
+    app: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      # Tudo como o usuário rabbitmq (999), sondas incluídas: uma sonda rodando como root antes de o servidor subir
+      # criava o .erlang.cookie com dono root e o RabbitMQ não conseguia mais lê-lo.
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:4.4-management
+          ports:
+            - { name: amqp, containerPort: 5672 }
+            - { name: management, containerPort: 15672 }
+            - { name: metrics, containerPort: 15692 }
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef: { name: conexao-secrets, key: RABBIT_USER }
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef: { name: conexao-secrets, key: RABBIT_PASS }
+          resources:
+            requests:
+              memory: 160Mi
+              cpu: 100m
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - { name: dados, mountPath: /var/lib/rabbitmq }
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 8
+          livenessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+      volumes:
+        - name: dados
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: conexao-solidaria
+  labels:
+    app: rabbitmq
+spec:
+  selector:
+    app: rabbitmq
+  ports:
+    - { name: amqp, port: 5672, targetPort: amqp }
+    - { name: management, port: 15672, targetPort: management }
+    - { name: metrics, port: 15692, targetPort: metrics }
+---
+# Painel de gerenciamento publicado no localhost:15672 (kind-config.yaml).
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-painel
+  namespace: conexao-solidaria
+spec:
+  type: NodePort
+  selector:
+    app: rabbitmq
+  ports:
+    - { name: management, port: 15672, targetPort: management, nodePort: 31567 }
+---
+# Declara exchange, fila doacao-recebida e bindings antes de a API publicar (rabbitmq/definitions.json).
+# Sem isto, uma doação feita antes da primeira subida do worker iria para uma exchange sem fila e se perderia.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rabbitmq-init
+  namespace: conexao-solidaria
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: importar-definicoes
+          image: curlimages/curl:8.10.1
+          env:
+            - name: RABBIT_USER
+              valueFrom:
+                secretKeyRef: { name: conexao-secrets, key: RABBIT_USER }
+            - name: RABBIT_PASS
+              valueFrom:
+                secretKeyRef: { name: conexao-secrets, key: RABBIT_PASS }
+          command: ["sh", "-c"]
+          args:
+            - >-
+              curl -fsS --retry 30 --retry-all-errors --retry-delay 3 -u "$RABBIT_USER:$RABBIT_PASS"
+              -H content-type:application/json -X POST --data-binary @/definicoes/definitions.json
+              http://rabbitmq:15672/api/definitions
+          volumeMounts:
+            - name: definicoes
+              mountPath: /definicoes
+      volumes:
+        - name: definicoes
+          configMap:
+            name: rabbitmq-definitions

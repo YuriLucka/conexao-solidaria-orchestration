@@ -1,0 +1,121 @@
+# Grafana em http://localhost:3000. Fontes de dados e dashboard provisionados (nada de configuração manual):
+# Prometheus (métricas dos serviços) e Zabbix (saúde dos serviços, pelo plugin oficial da comunidade).
+# O dashboard vem do ConfigMap grafana-dashboards, gerado pelo scripts/up.sh a partir de grafana/dashboards/.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisionamento
+  namespace: conexao-solidaria
+data:
+  fontes.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        jsonData:
+          timeInterval: 5s
+      - name: Zabbix
+        uid: zabbix
+        type: alexanderzobnin-zabbix-datasource
+        access: proxy
+        url: http://zabbix-web:8080/api_jsonrpc.php
+        jsonData:
+          username: Admin
+          trends: false
+        secureJsonData:
+          password: $ZABBIX_SENHA
+  apps.yaml: |
+    apiVersion: 1
+    apps:
+      - type: alexanderzobnin-zabbix-app
+        disabled: false
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: conexao-solidaria
+        folder: Conexão Solidária
+        type: file
+        disableDeletion: true
+        allowUiUpdates: false
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: conexao-solidaria
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+      annotations:
+        conexao-solidaria/config: "1"
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.6.0
+          ports:
+            - { name: http, containerPort: 3000 }
+          env:
+            - { name: GF_INSTALL_PLUGINS, value: alexanderzobnin-zabbix-app }
+            - { name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH, value: /var/lib/grafana/dashboards/conexao-solidaria.json }
+            - { name: GF_USERS_DEFAULT_LANGUAGE, value: pt-BR }
+            - { name: GF_ANALYTICS_REPORTING_ENABLED, value: "false" }
+            - { name: GF_ANALYTICS_CHECK_FOR_UPDATES, value: "false" }
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef: { name: conexao-secrets, key: GRAFANA_USER }
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: conexao-secrets, key: GRAFANA_PASSWORD }
+            # Usada na fonte de dados do Zabbix ($ZABBIX_SENHA em fontes.yaml).
+            - name: ZABBIX_SENHA
+              valueFrom:
+                secretKeyRef: { name: conexao-secrets, key: ZABBIX_PASSWORD }
+          volumeMounts:
+            - { name: provisionamento, mountPath: /etc/grafana/provisioning/datasources/fontes.yaml, subPath: fontes.yaml }
+            - { name: provisionamento, mountPath: /etc/grafana/provisioning/plugins/apps.yaml, subPath: apps.yaml }
+            - { name: provisionamento, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml, subPath: dashboards.yaml }
+            - { name: dashboards, mountPath: /var/lib/grafana/dashboards }
+          resources:
+            requests:
+              memory: 96Mi
+              cpu: 50m
+            limits:
+              memory: 384Mi
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 10
+      volumes:
+        - name: provisionamento
+          configMap:
+            name: grafana-provisionamento
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: conexao-solidaria
+  labels:
+    app: grafana
+spec:
+  type: NodePort
+  selector:
+    app: grafana
+  ports:
+    - { name: http, port: 3000, targetPort: http, nodePort: 30300 }

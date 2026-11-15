@@ -1,0 +1,213 @@
+{
+  "uid": "conexao-solidaria",
+  "title": "Conexão Solidária",
+  "description": "Doações processadas ao vivo, fila do RabbitMQ, requisições, CPU e memória dos microsserviços, e saúde vigiada pelo Zabbix.",
+  "tags": ["conexao-solidaria", "hackathon"],
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "id": 1, "type": "row", "title": "Doações", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Doações processadas no período",
+      "description": "Mensagens DoacaoRecebidaEvent somadas pelo doacoes-worker.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area", "textMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "green" } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(doacoes_processadas_total{resultado=\"Processada\"}[$__range]))", "instant": true }
+      ]
+    },
+    {
+      "id": 3, "type": "stat", "title": "Valor arrecadado no período",
+      "description": "Soma, em reais, das doações processadas pelo worker no intervalo do painel.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area", "textMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "currencyBRL", "decimals": 2, "color": { "mode": "fixed", "fixedColor": "green" } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(doacoes_valor_processado_reais_total[$__range]))", "instant": true }
+      ]
+    },
+    {
+      "id": 4, "type": "stat", "title": "Mensagens esperando na fila",
+      "description": "Mensagens prontas na fila doacao-recebida. Com o worker parado, este número sobe; ao voltar, zera.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "textMode": "value" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short", "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 }, { "color": "red", "value": 20 } ] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum(rabbitmq_detailed_queue_messages_ready{queue=\"doacao-recebida\"}) or vector(0)" }
+      ]
+    },
+    {
+      "id": 5, "type": "stat", "title": "Consumidores da fila",
+      "description": "Instâncias do doacoes-worker conectadas à fila doacao-recebida.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "value" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short", "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum(rabbitmq_detailed_queue_consumers{queue=\"doacao-recebida\"}) or vector(0)" }
+      ]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Doações processadas por minuto",
+      "description": "Por resultado: Processada (somada na campanha), Rejeitada (campanha encerrada antes do processamento), JaProcessada (mensagem repetida).",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 70, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "sum by (resultado) (increase(doacoes_processadas_total[1m]))", "legendFormat": "{{resultado}}" }
+      ]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Fila doacao-recebida",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "custom": { "fillOpacity": 15 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "sum(rabbitmq_detailed_queue_messages_ready{queue=\"doacao-recebida\"})", "legendFormat": "prontas (aguardando o worker)" },
+        { "refId": "B", "expr": "sum(rabbitmq_detailed_queue_messages_unacked{queue=\"doacao-recebida\"})", "legendFormat": "em processamento" }
+      ]
+    },
+    {
+      "id": 8, "type": "row", "title": "Microsserviços", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "Requisições por segundo (campanhas-api)",
+      "description": "Por código de resposta HTTP.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "sum by (code) (rate(http_requests_received_total{job=\"campanhas-api\"}[1m]))", "legendFormat": "HTTP {{code}}" }
+      ]
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "Tempo de resposta da API (p95)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"campanhas-api\"}[1m])))", "legendFormat": "campanhas-api p95" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le) (rate(doacoes_processamento_segundos_bucket[1m])))", "legendFormat": "processamento da doação p95 (worker)" }
+      ]
+    },
+    {
+      "id": 11, "type": "timeseries", "title": "CPU por microsserviço",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "rate(process_cpu_seconds_total{job=~\"campanhas-api|doacoes-worker\"}[1m])", "legendFormat": "{{job}}" }
+      ]
+    },
+    {
+      "id": 12, "type": "timeseries", "title": "Memória por microsserviço",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "process_working_set_bytes{job=~\"campanhas-api|doacoes-worker\"}", "legendFormat": "{{job}}" }
+      ]
+    },
+    {
+      "id": 13, "type": "timeseries", "title": "Requisições no Kong por serviço",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "sum by (service) (rate(kong_http_requests_total[1m]))", "legendFormat": "{{service}}" }
+      ]
+    },
+    {
+      "id": 14, "type": "stat", "title": "Alvos coletados pelo Prometheus",
+      "description": "1 = o Prometheus consegue ler o /metrics do serviço.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short", "decimals": 0,
+          "mappings": [ { "type": "value", "options": { "0": { "text": "fora" }, "1": { "text": "no ar" } } } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "up", "legendFormat": "{{job}}" }
+      ]
+    },
+    {
+      "id": 15, "type": "row", "title": "Zabbix", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 39 }
+    },
+    {
+      "id": 16, "type": "stat", "title": "Saúde dos microsserviços (Zabbix)",
+      "description": "Itens HTTP do Zabbix no /health de cada serviço: 1 = Healthy, 0 = com problema.",
+      "datasource": { "type": "alexanderzobnin-zabbix-datasource", "uid": "zabbix" },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 40 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "mappings": [ { "type": "value", "options": { "0": { "text": "com problema" }, "1": { "text": "saudável" } } } ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A", "queryType": "0",
+          "group": { "filter": "Conexão Solidária" }, "host": { "filter": "Conexão Solidária" },
+          "application": { "filter": "" }, "itemTag": { "filter": "" }, "item": { "filter": "/Saúde/" },
+          "functions": [], "options": { "showDisabledItems": false, "skipEmptyValues": false }
+        }
+      ]
+    },
+    {
+      "id": 17, "type": "alexanderzobnin-zabbix-triggers-panel", "title": "Alertas abertos no Zabbix",
+      "datasource": { "type": "alexanderzobnin-zabbix-datasource", "uid": "zabbix" },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 40 },
+      "targets": [
+        {
+          "refId": "A", "queryType": "5",
+          "group": { "filter": "Conexão Solidária" }, "host": { "filter": "/.*/" },
+          "application": { "filter": "" }, "trigger": { "filter": "" }, "tags": { "filter": "" },
+          "proxy": { "filter": "" },
+          "options": { "minSeverity": 0, "acknowledged": 2, "sortProblems": "default", "showProblems": "problems", "hostsInMaintenance": false, "limit": 100 }
+        }
+      ],
+      "options": { "hostField": true, "statusField": true, "severityField": true, "ageField": true, "descriptionField": true, "pageSize": 10 }
+    }
+  ]
+}

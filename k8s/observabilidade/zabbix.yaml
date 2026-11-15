@@ -1,0 +1,284 @@
+# Zabbix 7.0 LTS: servidor, interface web (http://localhost:8081) e banco próprio (PostgreSQL separado do banco X).
+# O Job zabbix-setup configura tudo pela API do Zabbix: grupo, host, itens HTTP no /health da API e do worker e alertas.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zabbix-db
+  namespace: conexao-solidaria
+  labels:
+    app: zabbix-db
+spec:
+  serviceName: zabbix-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zabbix-db
+  template:
+    metadata:
+      labels:
+        app: zabbix-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          env:
+            - { name: POSTGRES_DB, value: zabbix }
+            - { name: POSTGRES_USER, value: zabbix }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: conexao-secrets, key: ZABBIX_DB_PASSWORD }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          volumeMounts:
+            - { name: dados, mountPath: /var/lib/postgresql/data }
+          # A criação do esquema do Zabbix na primeira subida passa de 256 MiB.
+          resources:
+            requests:
+              memory: 96Mi
+              cpu: 50m
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "zabbix", "-d", "zabbix"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: dados
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zabbix-db
+  namespace: conexao-solidaria
+spec:
+  selector:
+    app: zabbix-db
+  ports:
+    - { name: postgres, port: 5432, targetPort: postgres }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zabbix-server
+  namespace: conexao-solidaria
+  labels:
+    app: zabbix-server
+spec:
+  replicas: 1
+  # Nunca dois servidores ao mesmo tempo: na primeira subida o servidor cria o esquema do banco,
+  # e dois criando juntos deixam o banco pela metade.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: zabbix-server
+  template:
+    metadata:
+      labels:
+        app: zabbix-server
+    spec:
+      containers:
+        - name: zabbix-server
+          image: zabbix/zabbix-server-pgsql:alpine-7.0-latest
+          ports:
+            - { name: trapper, containerPort: 10051 }
+          env:
+            - { name: DB_SERVER_HOST, value: zabbix-db }
+            - { name: POSTGRES_DB, value: zabbix }
+            - { name: POSTGRES_USER, value: zabbix }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: conexao-secrets, key: ZABBIX_DB_PASSWORD }
+            # Poucos processos: só itens HTTP de dois serviços.
+            - { name: ZBX_STARTPOLLERS, value: "2" }
+            - { name: ZBX_STARTHTTPPOLLERS, value: "2" }
+            - { name: ZBX_CACHESIZE, value: "16M" }
+          resources:
+            requests:
+              memory: 96Mi
+              cpu: 50m
+            limits:
+              memory: 320Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zabbix-server
+  namespace: conexao-solidaria
+spec:
+  selector:
+    app: zabbix-server
+  ports:
+    - { name: trapper, port: 10051, targetPort: trapper }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zabbix-web
+  namespace: conexao-solidaria
+  labels:
+    app: zabbix-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zabbix-web
+  template:
+    metadata:
+      labels:
+        app: zabbix-web
+    spec:
+      containers:
+        - name: zabbix-web
+          image: zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
+          ports:
+            - { name: http, containerPort: 8080 }
+          env:
+            - { name: ZBX_SERVER_HOST, value: zabbix-server }
+            - { name: ZBX_SERVER_NAME, value: "Conexão Solidária" }
+            - { name: DB_SERVER_HOST, value: zabbix-db }
+            - { name: POSTGRES_DB, value: zabbix }
+            - { name: POSTGRES_USER, value: zabbix }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: conexao-secrets, key: ZABBIX_DB_PASSWORD }
+            - { name: PHP_TZ, value: America/Sao_Paulo }
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 50m
+            limits:
+              memory: 256Mi
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zabbix-web
+  namespace: conexao-solidaria
+  labels:
+    app: zabbix-web
+spec:
+  type: NodePort
+  selector:
+    app: zabbix-web
+  ports:
+    - { name: http, port: 8080, targetPort: http, nodePort: 30081 }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zabbix-setup
+  namespace: conexao-solidaria
+data:
+  setup.sh: |
+    #!/bin/sh
+    # Configura o Zabbix pela API JSON-RPC. Idempotente: rodar de novo não duplica nada.
+    set -eu
+    apk add --no-cache curl jq >/dev/null
+    API=http://zabbix-web:8080/api_jsonrpc.php
+    TOKEN=""
+
+    rpc() {
+      if [ -n "$TOKEN" ]; then
+        curl -fsS -H 'Content-Type: application/json-rpc' -H "Authorization: Bearer $TOKEN" -d "$1" "$API"
+      else
+        curl -fsS -H 'Content-Type: application/json-rpc' -d "$1" "$API"
+      fi
+    }
+    resultado() { jq -er '.result' || { echo "erro da API do Zabbix" >&2; exit 1; }; }
+    login() { rpc "{\"jsonrpc\":\"2.0\",\"method\":\"user.login\",\"params\":{\"username\":\"Admin\",\"password\":\"$1\"},\"id\":1}" | jq -r '.result // empty'; }
+
+    echo "Aguardando a API do Zabbix..."
+    until rpc '{"jsonrpc":"2.0","method":"apiinfo.version","params":{},"id":1}' >/dev/null 2>&1; do sleep 5; done
+
+    # O login só funciona depois que o servidor criou o banco (na primeira subida leva alguns minutos).
+    # Primeira subida: entra com a senha padrão e troca pela do .env.
+    TENTATIVAS=0
+    TOKEN_PADRAO=""
+    while :; do
+      TOKEN=$(login "$ZABBIX_SENHA" || true)
+      [ -n "$TOKEN" ] && break
+      TOKEN_PADRAO=$(login zabbix || true)
+      [ -n "$TOKEN_PADRAO" ] && break
+      TENTATIVAS=$((TENTATIVAS + 1))
+      [ "$TENTATIVAS" -lt 60 ] || { echo "não foi possível entrar no Zabbix" >&2; exit 1; }
+      sleep 5
+    done
+    if [ -z "$TOKEN" ]; then
+      TOKEN="$TOKEN_PADRAO"
+      ADMIN=$(rpc '{"jsonrpc":"2.0","method":"user.get","params":{"filter":{"username":"Admin"},"output":["userid"]},"id":1}' | jq -r '.result[0].userid')
+      rpc "{\"jsonrpc\":\"2.0\",\"method\":\"user.update\",\"params\":{\"userid\":\"$ADMIN\",\"current_passwd\":\"zabbix\",\"passwd\":\"$ZABBIX_SENHA\"},\"id\":1}" | resultado >/dev/null
+      TOKEN=$(login "$ZABBIX_SENHA")
+      echo "Senha do Admin trocada."
+    fi
+
+    # O host "Zabbix server" de fábrica espera um agente que não existe aqui e só gera alerta falso: fica desligado.
+    PADRAO=$(rpc '{"jsonrpc":"2.0","method":"host.get","params":{"filter":{"host":["Zabbix server"]},"output":["hostid"]},"id":1}' | jq -r '.result[0].hostid // empty')
+    if [ -n "$PADRAO" ]; then
+      rpc "{\"jsonrpc\":\"2.0\",\"method\":\"host.update\",\"params\":{\"hostid\":\"$PADRAO\",\"status\":1},\"id\":1}" | resultado >/dev/null
+    fi
+
+    EXISTE=$(rpc '{"jsonrpc":"2.0","method":"host.get","params":{"filter":{"host":["conexao-solidaria"]},"output":["hostid"]},"id":1}' | jq '.result | length')
+    if [ "$EXISTE" -gt 0 ]; then
+      echo "Zabbix já configurado."
+      exit 0
+    fi
+
+    GRUPO=$(rpc '{"jsonrpc":"2.0","method":"hostgroup.create","params":{"name":"Conexão Solidária"},"id":1}' | resultado | jq -r '.groupids[0]')
+    HOST=$(rpc "{\"jsonrpc\":\"2.0\",\"method\":\"host.create\",\"params\":{\"host\":\"conexao-solidaria\",\"name\":\"Conexão Solidária\",\"groups\":[{\"groupid\":\"$GRUPO\"}]},\"id\":1}" | resultado | jq -r '.hostids[0]')
+
+    # Um item HTTP por microsserviço: lê o /health (503 também, para registrar "Unhealthy") e guarda 1 (saudável) ou 0.
+    # Alerta quando o valor é 0 ou quando o serviço não responde por 90 s (pod parado, por exemplo).
+    for SERVICO in campanhas-api doacoes-worker; do
+      rpc "{\"jsonrpc\":\"2.0\",\"method\":\"item.create\",\"params\":{
+        \"hostid\":\"$HOST\",\"name\":\"Saúde do $SERVICO\",\"key_\":\"saude[$SERVICO]\",\"type\":19,\"value_type\":3,
+        \"delay\":\"30s\",\"timeout\":\"5s\",\"url\":\"http://$SERVICO:8080/health\",\"status_codes\":\"200,503\",
+        \"tags\":[{\"tag\":\"servico\",\"value\":\"$SERVICO\"}],
+        \"preprocessing\":[
+          {\"type\":12,\"params\":\"\$.status\",\"error_handler\":0,\"error_handler_params\":\"\"},
+          {\"type\":21,\"params\":\"return value === 'Healthy' ? 1 : 0;\",\"error_handler\":0,\"error_handler_params\":\"\"}
+        ]},\"id\":1}" | resultado >/dev/null
+      rpc "{\"jsonrpc\":\"2.0\",\"method\":\"trigger.create\",\"params\":{
+        \"description\":\"$SERVICO fora do ar\",\"priority\":4,
+        \"expression\":\"last(/conexao-solidaria/saude[$SERVICO])=0 or nodata(/conexao-solidaria/saude[$SERVICO],90s)=1\",
+        \"comments\":\"O /health do $SERVICO não respondeu Healthy.\"},\"id\":1}" | resultado >/dev/null
+      echo "Monitorando $SERVICO."
+    done
+    echo "Zabbix configurado."
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: zabbix-setup
+  namespace: conexao-solidaria
+spec:
+  backoffLimit: 20
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: setup
+          image: alpine:3.20
+          command: ["sh", "/setup/setup.sh"]
+          env:
+            - name: ZABBIX_SENHA
+              valueFrom:
+                secretKeyRef: { name: conexao-secrets, key: ZABBIX_PASSWORD }
+          volumeMounts:
+            - { name: setup, mountPath: /setup }
+      volumes:
+        - name: setup
+          configMap:
+            name: zabbix-setup

@@ -108,5 +108,8 @@ Kubernetes (kind), observabilidade (Prometheus, Grafana, Zabbix), documentos de 
 | F1 a F4 | feito: visão geral (gráfico, alertas, ao vivo), campanhas, criar/editar (capa, prévia, regras), concluir/cancelar, doadores, doações |
 | G | feito: 48 testes de unidade do front (xUnit + bUnit); E2E de doação e de gestão em iPhone (WebKit) e desktop (Chromium); axe WCAG 2.1 AA sem violação (14 telas x 2 aparelhos x tema claro/escuro, `npm run acessibilidade`); revisão independente com 8 achados corrigidos; fotos no login e no topo do painel (extra); cabeçalhos de segurança no nginx |
 | H1 | feito: site no Compose atrás do Kong (`/` site, `/api` API) |
+| I1 | feito: Kubernetes (kind) com `scripts/up.sh`: PostgreSQL, Redis, RabbitMQ (fila declarada por Job), Kong, API, worker e site com imagens do GHCR; fluxos de doação, gestão e sessão passando pelo site no cluster; mensagem parada na fila com o worker em 0 réplicas |
+| I2 | feito: Prometheus (API, worker, Kong, RabbitMQ), Grafana com dashboard provisionado e fonte Zabbix, Zabbix 7.0 com banco próprio configurado por Job (itens HTTP no `/health` e alerta; testado derrubando o worker: alerta em ~100 s, resolvido ao voltar) |
+| I3 | feito: README principal, `docs/arquitetura.md` (Mermaid) e `docs/bancos-de-dados.md`; pendentes: PDF dos bancos, roteiro final e gravação do vídeo |
 
 Decisões do front: "Doar" envia a intenção direto (sem a tela de Pix do protótipo); datas da gestão com máscara dd/mm/aaaa (o campo datetime-local quebra o Blazor em navegadores sem suporte, como o WebKit de teste no Windows); início às 00:00 e término às 23:59 de Brasília; gráfico em SVG próprio no visual do protótipo.

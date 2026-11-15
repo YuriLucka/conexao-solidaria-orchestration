@@ -1,2 +1,3 @@
 .env
 *.log
+.kong.gerado.yml
