@@ -69,7 +69,7 @@ kubectl -n conexao-solidaria get pods        # tudo Running
 ./scripts/down.sh                            # apaga o cluster
 ```
 
-### Mensagem parada na fila (roteiro do vídeo)
+### Mensagem parada na fila (roteiro completo do vídeo em [docs/roteiro-video.md](docs/roteiro-video.md))
 
 ```bash
 kubectl -n conexao-solidaria scale deploy/doacoes-worker --replicas=0
@@ -116,6 +116,6 @@ k8s/                      kind-config, namespace, infra (PostgreSQL, Redis, Rabb
 grafana/dashboards/       dashboard provisionado
 scripts/                  up.sh, down.sh, gerar-trafego.sh
 tools/carga/              dados de demonstração e de carga (SQL)
-docs/                     arquitetura, bancos de dados (PDF), coleção Postman, plano, relatório de entrega
+docs/                     arquitetura, bancos de dados (PDF), roteiro do vídeo, coleção Postman, plano, relatório de entrega
 tools/docs/               gera o PDF dos bancos a partir do Markdown (python tools/docs/md_para_pdf.py ...)
 ```

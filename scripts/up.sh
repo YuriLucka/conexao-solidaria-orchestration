@@ -13,6 +13,15 @@ cd "$RAIZ"
 
 passo() { printf '\n==> %s\n' "$1"; }
 falha() { printf 'ERRO: %s\n' "$1" >&2; exit 1; }
+# kubectl apply com nova tentativa: em máquina carregada o etcd do kind às vezes responde "request timed out".
+aplicar_yaml() {
+  for tentativa in 1 2 3 4 5; do
+    kubectl apply "$@" && return 0
+    echo "  (falhou; nova tentativa $tentativa/5 em 10 s)"
+    sleep 10
+  done
+  return 1
+}
 
 for cmd in docker kind kubectl; do
   command -v "$cmd" >/dev/null || falha "$cmd não encontrado no PATH."
@@ -45,8 +54,8 @@ fi
 kubectl config use-context "kind-$CLUSTER" >/dev/null
 
 passo "Namespace, segredos e configurações"
-kubectl apply -f k8s/namespace.yaml
-aplicar() { kubectl -n "$NS" apply -f - >/dev/null; }
+aplicar_yaml -f k8s/namespace.yaml
+aplicar() { local yaml; yaml=$(cat); for _ in 1 2 3 4 5; do printf '%s\n' "$yaml" | kubectl -n "$NS" apply -f - >/dev/null && return 0; sleep 10; done; return 1; }
 kubectl -n "$NS" create secret generic conexao-secrets --dry-run=client -o yaml \
   --from-literal=POSTGRES_USER="$POSTGRES_USER" \
   --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
@@ -68,17 +77,17 @@ kubectl -n "$NS" create configmap grafana-dashboards --from-file=grafana/dashboa
 echo "ok"
 
 passo "Infraestrutura: PostgreSQL, Redis, RabbitMQ"
-kubectl apply -f k8s/infra/postgres.yaml -f k8s/infra/redis.yaml -f k8s/infra/rabbitmq.yaml
+aplicar_yaml -f k8s/infra/postgres.yaml -f k8s/infra/redis.yaml -f k8s/infra/rabbitmq.yaml
 kubectl -n "$NS" rollout status statefulset/postgres --timeout=300s
 kubectl -n "$NS" rollout status deployment/redis --timeout=300s
 kubectl -n "$NS" rollout status deployment/rabbitmq --timeout=300s
 kubectl -n "$NS" wait --for=condition=complete job/rabbitmq-init --timeout=300s
 
 passo "Microsserviços: campanhas-api, doacoes-worker e site"
-kubectl apply -f "$REPOS/conexao-solidaria-campanhas-api/k8s"
+aplicar_yaml -f "$REPOS/conexao-solidaria-campanhas-api/k8s"
 kubectl -n "$NS" rollout status deployment/campanhas-api --timeout=600s
 # O worker usa as tabelas criadas pelas migrações da API: sobe depois dela.
-kubectl apply -f "$REPOS/conexao-solidaria-doacoes-worker/k8s" -f "$REPOS/conexao-solidaria-web/k8s"
+aplicar_yaml -f "$REPOS/conexao-solidaria-doacoes-worker/k8s" -f "$REPOS/conexao-solidaria-web/k8s"
 kubectl -n "$NS" rollout status deployment/doacoes-worker --timeout=600s
 kubectl -n "$NS" rollout status deployment/web --timeout=300s
 
@@ -86,13 +95,13 @@ passo "API Gateway: Kong"
 # Já existia: reinicia para reler o ConfigMap (o Kong DB-less só lê a configuração na subida).
 existe() { kubectl -n "$NS" get deployment "$1" >/dev/null 2>&1; }
 existe kong && KONG_EXISTIA=1 || KONG_EXISTIA=0
-kubectl apply -f k8s/infra/kong.yaml
+aplicar_yaml -f k8s/infra/kong.yaml
 [ "$KONG_EXISTIA" = 1 ] && kubectl -n "$NS" rollout restart deployment/kong >/dev/null
 kubectl -n "$NS" rollout status deployment/kong --timeout=300s
 
 passo "Observabilidade: Prometheus, Grafana e Zabbix"
 existe prometheus && OBS_EXISTIA=1 || OBS_EXISTIA=0
-kubectl apply -f k8s/observabilidade/prometheus.yaml -f k8s/observabilidade/zabbix.yaml -f k8s/observabilidade/grafana.yaml
+aplicar_yaml -f k8s/observabilidade/prometheus.yaml -f k8s/observabilidade/zabbix.yaml -f k8s/observabilidade/grafana.yaml
 # Já existiam: reinicia para reler os ConfigMaps (configuração do Prometheus, dashboard do Grafana).
 [ "$OBS_EXISTIA" = 1 ] && kubectl -n "$NS" rollout restart deployment/prometheus deployment/grafana >/dev/null
 kubectl -n "$NS" rollout status deployment/prometheus --timeout=300s
@@ -102,7 +111,7 @@ kubectl -n "$NS" rollout status deployment/zabbix-server --timeout=600s
 kubectl -n "$NS" rollout status deployment/zabbix-web --timeout=600s
 # Job idempotente: recriado a cada subida para aplicar a configuração atual.
 kubectl -n "$NS" delete job zabbix-setup --ignore-not-found >/dev/null
-kubectl apply -f k8s/observabilidade/zabbix.yaml >/dev/null
+aplicar_yaml -f k8s/observabilidade/zabbix.yaml >/dev/null
 kubectl -n "$NS" wait --for=condition=complete job/zabbix-setup --timeout=600s
 
 passo "Pronto"
